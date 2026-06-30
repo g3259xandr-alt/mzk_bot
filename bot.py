@@ -7,7 +7,7 @@ from maxapi.types import BotStarted
 BOT_TOKEN = os.getenv("f9LHodD0cOLpiUUqZl2woipOkeMzfejHZtXHFW4ukquMz9Eicejd3Jyov5gTbLqSljepOxiZIvtRt0ir7MOc")
 
 # Инициализируем бота
-bot = Bot(f9LHodD0cOLpiUUqZl2woipOkeMzfejHZtXHFW4ukquMz9Eicejd3Jyov5gTbLqSljepOxiZIvtRt0ir7MOc)
+bot = Bot(os.getenv("BOT_TOKEN"))
 dp = Dispatcher()
 
 # Этот обработчик срабатывает, когда пользователь нажимает кнопку "Старт" (или запускает бота впервые)
