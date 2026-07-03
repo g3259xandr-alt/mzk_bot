@@ -192,4 +192,86 @@ def district_back_menu() -> list:
 
 
 def format_district_points(district: str) -> str:
-    points = PO
+    points = POINTS_BY_DISTRICT.get(district, [])
+    text = f"📍 {district}:\n\n"
+    for p in points:
+        text += (
+            f"🏢 Приёмный пункт\n"
+            f"   Адрес: {p['address']}\n"
+            f"   Режим работы: {p['hours']}\n"
+            f"   Телефон: {PHONE}\n\n"
+        )
+    return text.strip()
+
+
+def format_vacancies() -> str:
+    text = "💼 Открытые вакансии:\n\n"
+    for v in VACANCIES:
+        text += (
+            f"▪️ {v['title']}\n"
+            f"   Зарплата: {v['salary']}\n"
+            f"   {v['desc']}\n\n"
+        )
+    text += "Резюме и вопросы — напишите нам, и мы свяжемся с Вами!"
+    return text
+
+
+# ======================= ОБРАБОТЧИКИ =======================
+
+@dp.bot_started()
+async def on_start(event: BotStarted):
+    await event.bot.send_message(
+        chat_id=event.chat_id,
+        text=WELCOME_TEXT,
+        attachments=main_menu(),
+    )
+
+
+@dp.message_created(CommandStart())
+async def on_start_command(event: MessageCreated):
+    await event.message.answer(WELCOME_TEXT, attachments=main_menu())
+
+
+@dp.message_callback()
+async def on_callback(event: MessageCallback):
+    payload = event.callback.payload
+
+    if payload == "prices":
+        await event.message.answer(get_prices_text(), attachments=back_menu())
+
+    elif payload == "points":
+        await event.message.answer(
+            "Выберите район, чтобы увидеть пункты приёма 👇",
+            attachments=districts_menu(),
+        )
+
+    elif payload.startswith("district:"):
+        district = payload.split("district:", 1)[1]
+        await event.message.answer(
+            format_district_points(district),
+            attachments=district_back_menu(),
+        )
+
+    elif payload == "vacancies":
+        await event.message.answer(format_vacancies(), attachments=back_menu())
+
+    elif payload == "menu":
+        await event.message.answer(WELCOME_TEXT, attachments=main_menu())
+
+
+@dp.message_created()
+async def on_any_message(event: MessageCreated):
+    # На любое другое сообщение показываем меню ещё раз
+    await event.message.answer(
+        "Пожалуйста, выберите пункт меню 👇",
+        attachments=main_menu(),
+    )
+
+
+async def main():
+    print("=== БОТ МЗК ЗАПУЩЕН ===")
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
