@@ -270,38 +270,32 @@ async def on_start(event: BotStarted):
     )
 
 
-@dp.message_created(CommandStart())
-async def on_start_command(event: MessageCreated):
-    await event.message.answer(WELCOME_TEXT, attachments=main_menu())
-
-
 @dp.message_callback()
 async def on_callback(event: MessageCallback):
     payload = event.callback.payload
 
-    if payload == "prices":
-        await event.message.edit(get_prices_text(), attachments=back_menu())
+    try:
+        await event.message.delete()
+    except Exception as e:
+        print(f"Не удалось удалить сообщение: {e}")
 
+    if payload == "prices":
+        await event.message.answer(get_prices_text(), attachments=back_menu())
     elif payload == "points":
-        await event.message.edit(
+        await event.message.answer(
             "Выберите район, чтобы увидеть пункты приёма 👇",
             attachments=districts_menu(),
         )
-
     elif payload.startswith("district:"):
         district = payload.split("district:", 1)[1]
-        await event.message.edit(
+        await event.message.answer(
             format_district_points(district),
             attachments=district_back_menu(),
         )
-
     elif payload == "vacancies":
-        await event.message.edit(format_vacancies(), attachments=back_menu())
-
+        await event.message.answer(format_vacancies(), attachments=back_menu())
     elif payload == "menu":
-        await event.message.edit(WELCOME_TEXT, attachments=main_menu())
-
-
+        await event.message.answer(WELCOME_TEXT, attachments=main_menu())
 @dp.message_created()
 async def on_any_message(event: MessageCreated):
     # На любое другое сообщение показываем меню ещё раз
