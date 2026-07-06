@@ -1,3 +1,5 @@
+		
+		
 import os
 import asyncio
 import logging
@@ -103,7 +105,10 @@ VACANCIES = [
 
 PHONE = " (8-8342) 27-03-71"
 
-# Пункты приёма, сгруппированные по официальным районам Республики Мордовия
+# Пункты приёма, сгруппированные по официальным районам Республики Мордовия.
+# Значение может быть:
+#   - списком точек [ {"address":..., "hours":...}, ... ]  -> обычный район
+#   - словарём подрайонов { "Название подрайона": [ {...}, ... ], ... } -> район с подрайонами (например Саранск)
 POINTS_BY_DISTRICT = {
     "Ардатовский район": [
         {"address": "Ардатов, ул. Чапаева, 41", "hours": "Пн-Пт: 8:00-17:00"},
@@ -158,27 +163,33 @@ POINTS_BY_DISTRICT = {
         {"address": "Рузаевка, ул. Маяковского, 173", "hours": "Ежедневно: 8:00-20:00"},
         {"address": "Рузаевка, ул. Рубцова, 16А", "hours": "Ежедневно: 8:00-20:00"},
     ],
-    "Саранск (городской округ)": [
-        {"address": "Саранск, ул. 1-я Промышленная, 41", "hours": "Ежедневно: 8:00-17:00"},
-        {"address": "Саранск, ул. 1-я Промышленная, 13", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, ул. Крылова, 2", "hours": "Вт-Сб: 8:00-17:00"},
-        {"address": "Саранск, ул. Пролетарская, 144", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, ул. Севастопольская, 128а", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, ул. Рузаевская, 36Б", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, ул. Рабочая, 126", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "р.п. Ялга, пер. Вокзальный, 3", "hours": "Ежедневно: 8:00-20:00"},
-        {"address": "р.п. Ялга, ул. Российская, 25/1", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, Юго-западное шоссе, 10", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, ул. Строительная, 2/1", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, ул. Веселовского, 58Б", "hours": "Пн-Пт: 9:00-18:00"},
-        {"address": "Саранск, ул. Сущинского (тер. ГК Таврия)", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, ул. Пушкина (тер. ГК Жигули)", "hours": "Пн-Пт: 8:30-17:30"},
-        {"address": "Саранск, Проспект 70 лет Октября, 167", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "Саранск, Александровское шоссе, 37Б", "hours": "Вт-Сб: 9:00-18:00"},
-        {"address": "Саранск, ул. Косарева, 128", "hours": "Пн-Пт: 8:00-17:00 (Не работает)"},
-        {"address": "Саранск, рп. Николаевка, ул. Ленина, 89", "hours": "Пн-Пт: 8:00-17:00"},
-        {"address": "с. Берсеневка, ул. Северная, 12Б", "hours": "Пн-Пт: 8:00-17:00"},
-    ],
+    "Саранск (городской округ)": {
+        "Ленинский": [
+            {"address": "Саранск, ул. Рабочая, 126", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, Юго-западное шоссе, 10", "hours": "Пн-Пт: 8:00-17:00"},
+        ],
+        "Октябрьский": [
+            {"address": "Саранск, рп. Николаевка, ул. Ленина, 89", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, Александровское шоссе, 37Б", "hours": "Вт-Сб: 9:00-18:00"},
+            {"address": "р.п. Ялга, ул. Российская, 25/1", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "р.п. Ялга, пер. Вокзальный, 3", "hours": "Ежедневно: 8:00-20:00"},
+            {"address": "Саранск, ул. Рузаевская, 36Б", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, ул. Крылова, 2", "hours": "Вт-Сб: 8:00-17:00"},
+            {"address": "Саранск, ул. Косарева, 128", "hours": "Пн-Пт: 8:00-17:00 (Не работает)"},
+            {"address": "Саранск, Проспект 70 лет Октября, 167", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, ул. Сущинского (тер. ГК Таврия)", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, ул. Севастопольская, 128а", "hours": "Пн-Пт: 8:00-17:00"},
+        ],
+        "Пролетарский": [
+            {"address": "Саранск, ул. 1-я Промышленная, 13", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, ул. 1-я Промышленная, 41", "hours": "Ежедневно: 8:00-17:00"},
+            {"address": "Саранск, ул. Пролетарская, 144", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, ул. Пушкина (тер. ГК Жигули)", "hours": "Пн-Пт: 8:30-17:30"},
+            {"address": "Саранск, ул. Веселовского, 58Б", "hours": "Пн-Пт: 9:00-18:00"},
+            {"address": "с. Берсеневка, ул. Северная, 12Б", "hours": "Пн-Пт: 8:00-17:00"},
+            {"address": "Саранск, ул. Строительная, 2/1", "hours": "Пн-Пт: 8:00-17:00"},
+        ],
+    },
     "Старошайговский район": [
         {"address": "Ст. Шайгово, ул. Больничная, 15А", "hours": "Пн-Пт: 9:00-18:00"},
     ],
@@ -218,11 +229,22 @@ def back_menu() -> list:
 
 
 def districts_menu() -> list:
-    """Клавиатура со списком районов."""
+    """Клавиатура со списком районов (верхний уровень)."""
     kb = InlineKeyboardBuilder()
     for district in POINTS_BY_DISTRICT.keys():
         kb.row(CallbackButton(text=f"📍 {district}", payload=f"district:{district}"))
     kb.row(CallbackButton(text="⬅️ Назад в меню", payload="menu"))
+    return [kb.as_markup()]
+
+
+def subdistricts_menu(district: str) -> list:
+    """Клавиатура со списком подрайонов внутри района (например, районы Саранска)."""
+    kb = InlineKeyboardBuilder()
+    subdistricts = POINTS_BY_DISTRICT[district]
+    for sub in subdistricts.keys():
+        kb.row(CallbackButton(text=f"📍 {sub}", payload=f"sub:{district}|{sub}"))
+    kb.row(CallbackButton(text="⬅️ К списку районов", payload="points"))
+    kb.row(CallbackButton(text="🏠 Главное меню", payload="menu"))
     return [kb.as_markup()]
 
 
@@ -234,9 +256,18 @@ def district_back_menu() -> list:
     return [kb.as_markup()]
 
 
-def format_district_points(district: str) -> str:
-    points = POINTS_BY_DISTRICT.get(district, [])
-    text = f"📍 {district}:\n\n"
+def subdistrict_back_menu(district: str) -> list:
+    """Клавиатура: назад к списку подрайонов, к районам и в главное меню."""
+    kb = InlineKeyboardBuilder()
+    kb.row(CallbackButton(text="⬅️ К районам города", payload=f"district:{district}"))
+    kb.row(CallbackButton(text="📍 К списку районов", payload="points"))
+    kb.row(CallbackButton(text="🏠 Главное меню", payload="menu"))
+    return [kb.as_markup()]
+
+
+def format_points_list(title: str, points: list) -> str:
+    """Форматирует список точек в текст (используется и для обычных районов, и для подрайонов)."""
+    text = f"📍 {title}:\n\n"
     for p in points:
         text += (
             f"🏢 Приёмный пункт\n"
@@ -281,21 +312,47 @@ async def on_callback(event: MessageCallback):
 
     if payload == "prices":
         await event.message.answer(get_prices_text(), attachments=back_menu())
+
     elif payload == "points":
         await event.message.answer(
             "Выберите район, чтобы увидеть пункты приёма 👇",
             attachments=districts_menu(),
         )
+
     elif payload.startswith("district:"):
         district = payload.split("district:", 1)[1]
+        data = POINTS_BY_DISTRICT.get(district)
+
+        if isinstance(data, dict):
+            # У района есть подрайоны (например, Саранск) — показываем их список
+            await event.message.answer(
+                f"Выберите район города {district.split(' (')[0]} 👇",
+                attachments=subdistricts_menu(district),
+            )
+        else:
+            # Обычный район — сразу список точек
+            await event.message.answer(
+                format_points_list(district, data),
+                attachments=district_back_menu(),
+            )
+
+    elif payload.startswith("sub:"):
+        raw = payload.split("sub:", 1)[1]
+        district, sub = raw.split("|", 1)
+        points = POINTS_BY_DISTRICT[district][sub]
+        title = f"{district.split(' (')[0]}, {sub} район"
         await event.message.answer(
-            format_district_points(district),
-            attachments=district_back_menu(),
+            format_points_list(title, points),
+            attachments=subdistrict_back_menu(district),
         )
+
     elif payload == "vacancies":
         await event.message.answer(format_vacancies(), attachments=back_menu())
+
     elif payload == "menu":
         await event.message.answer(WELCOME_TEXT, attachments=main_menu())
+
+
 @dp.message_created()
 async def on_any_message(event: MessageCreated):
     # На любое другое сообщение показываем меню ещё раз
