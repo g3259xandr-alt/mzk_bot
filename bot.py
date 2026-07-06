@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import asyncio
 import logging
@@ -17,13 +18,22 @@ dp = Dispatcher()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PRICES_FILE = os.path.join(BASE_DIR, "prices.json")
+VACANCIES_FILE = os.path.join(BASE_DIR, "vacancies.json")
 
-# ID пользователей MAX, которым разрешено менять цены.
-# Узнать свой ID можно, написав боту команду /myid, затем вписать число сюда
+# ID пользователей MAX, которым разрешено менять цены и вакансии.
+# Узнать свой ID можно, написав боту команду /myid, затем добавить число сюда
 # (или в переменную окружения ADMIN_IDS через запятую: "123456,789012")
 ADMIN_IDS = {
-    int(x) for x in os.getenv("ADMIN_IDS", "211264877").replace(" ", "").split(",") if x
+    int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x
 }
+
+
+def is_admin(event: MessageCreated) -> bool:
+    return event.from_user.user_id in ADMIN_IDS
+
+
+def normalize(text: str) -> str:
+    return text.strip().lower().replace("ё", "е")
 
 
 # ======================= ДАННЫЕ (редактируйте здесь) =======================
@@ -36,11 +46,11 @@ WELCOME_TEXT = (
     '⚙️ Помогу подобрать ближайший пункт приема для Вас\n'
     '⚙️ Помогу узнать актуальные цены на чёрный и цветной металл\n'
     '⚙️ Расскажу про вакансии на предприятии\n\n'
-    '🤝 Я всегда на связи и готов помочь Вам!'
+    '🤝 Я всегда на связи и готов помочь Вам!\n\n'
 )
 
-# Список позиций прайса: key — внутренний идентификатор, label — как показывать,
-# aliases — другие слова, по которым бот тоже узнает эту позицию в командах.
+# -------- ЦЕНЫ --------
+
 PRICE_ITEMS = [
     {"key": "med", "label": "Медь", "aliases": ["медь"]},
     {"key": "latun", "label": "Латунь", "aliases": ["латунь"]},
@@ -65,7 +75,6 @@ def load_prices() -> dict:
         try:
             with open(PRICES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # на случай если в файле не хватает какой-то позиции
             for k, v in DEFAULT_PRICES.items():
                 data.setdefault(k, v)
             return data
@@ -83,7 +92,6 @@ PRICES = load_prices()
 
 
 def format_price(value) -> str:
-    # 780.0 -> "780", 780.5 -> "780.5"
     if float(value) == int(value):
         return str(int(value))
     return str(value)
@@ -102,16 +110,10 @@ def get_prices_text() -> str:
 
 
 def prices_template_text() -> str:
-    """Текст в формате, который можно скопировать, поправить и отправить обратно в /setprices."""
     return "\n".join(f'{item["label"]}: {format_price(PRICES.get(item["key"], 0))}' for item in PRICE_ITEMS)
 
 
-def normalize(text: str) -> str:
-    return text.strip().lower().replace("ё", "е")
-
-
 def find_price_key(user_text: str):
-    """Находит внутренний key позиции по названию/алиасу, которое ввёл человек."""
     norm = normalize(user_text)
     for item in PRICE_ITEMS:
         candidates = [item["label"]] + item["aliases"]
@@ -120,14 +122,16 @@ def find_price_key(user_text: str):
     return None
 
 
-def label_for(key: str) -> str:
+def label_for_price(key: str) -> str:
     for item in PRICE_ITEMS:
         if item["key"] == key:
             return item["label"]
     return key
 
 
-VACANCIES = [
+# -------- ВАКАНСИИ --------
+
+DEFAULT_VACANCIES = [
     {
         "title": "Инженер-строитель",
         "salary": "от 90 000 руб.",
@@ -184,8 +188,103 @@ VACANCIES = [
     },
 ]
 
+
+def load_vacancies() -> list:
+    if os.path.exists(VACANCIES_FILE):
+        try:
+            with open(VACANCIES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list) and data:
+                return data
+        except Exception as e:
+            print(f"Не удалось прочитать {VACANCIES_FILE}, использую значения по умолчанию: {e}")
+    return [dict(v) for v in DEFAULT_VACANCIES]
+
+
+def save_vacancies(vacancies: list) -> None:
+    with open(VACANCIES_FILE, "w", encoding="utf-8") as f:
+        json.dump(vacancies, f, ensure_ascii=False, indent=2)
+
+
+VACANCIES = load_vacancies()
+
 PHONE = " (8-8342) 27-03-71"
 
+# Поля для парсинга блока вакансии в текстовых командах администратора
+VACANCY_FIELD_ALIASES = {
+    "title": ["должность", "вакансия", "title"],
+    "salary": ["зарплата", "оплата", "salary"],
+    "schedule": ["график", "график работы", "schedule"],
+    "desc": ["описание", "обязанности", "desc"],
+}
+
+
+def parse_kv_block(block: str) -> dict:
+    """Разбирает текстовый блок вида 'Должность: ...\nЗарплата: ...' в словарь."""
+    alias_to_field = {}
+    for field, aliases in VACANCY_FIELD_ALIASES.items():
+        for a in aliases:
+            alias_to_field[normalize(a)] = field
+
+    result = {}
+    current_field = None
+    buffer = []
+
+    def flush():
+        if current_field and buffer:
+            result[current_field] = "\n".join(buffer).strip()
+
+    for raw_line in block.split("\n"):
+        line = raw_line.rstrip()
+        if ":" in line:
+            label, _, rest = line.partition(":")
+            norm_label = normalize(label)
+            if norm_label in alias_to_field:
+                flush()
+                current_field = alias_to_field[norm_label]
+                buffer = [rest.strip()]
+                continue
+        if current_field:
+            buffer.append(line)
+    flush()
+    return result
+
+
+def vacancy_from_parsed(parsed: dict) -> dict:
+    return {
+        "title": parsed.get("title", "").strip(),
+        "salary": parsed.get("salary", "не указана").strip(),
+        "schedule": parsed.get("schedule", "-").strip(),
+        "desc": parsed.get("desc", "").strip(),
+    }
+
+
+def vacancies_template_text() -> str:
+    blocks = []
+    for v in VACANCIES:
+        block = (
+            f"Должность: {v['title']}\n"
+            f"Зарплата: {v['salary']}\n"
+            f"График: {v.get('schedule', '-')}\n"
+            f"Описание: {v.get('desc', '')}"
+        )
+        blocks.append(block)
+    return "\n---\n".join(blocks)
+
+
+def format_vacancies() -> str:
+    text = "💼 Открытые вакансии:\n\n"
+    for i, v in enumerate(VACANCIES, start=1):
+        text += (
+            f"{i}. {v['title']}\n"
+            f"   💰 {v['salary']} | 🗓 {v.get('schedule', '-')}\n"
+            f"   {v.get('desc', '')}\n\n"
+        )
+    text += "📞 По вопросам трудоустройства звоните: " + PHONE
+    return text
+
+
+# -------- ПУНКТЫ ПРИЁМА --------
 # Пункты приёма, сгруппированные по официальным районам Республики Мордовия.
 POINTS_BY_DISTRICT = {
     "Ардатовский район": [
@@ -349,35 +448,101 @@ def format_points_list(title: str, points: list) -> str:
     return text.strip()
 
 
-def format_vacancies() -> str:
-    text = "💼 Открытые вакансии:\n\n"
-    for i, v in enumerate(VACANCIES, start=1):
+GENERAL_HELP_TEXT = (
+    "ℹ️ Справка по боту\n\n"
+    "В основном я работаю через кнопки — просто нажмите /start, "
+    "чтобы открыть меню с ценами, пунктами приёма и вакансиями.\n\n"
+    "Доступные команды:\n"
+    "/start — открыть главное меню\n"
+    "/help — показать эту справку\n"
+    "/myid — узнать свой ID (нужен, чтобы получить права администратора)"
+)
+
+ADMIN_HELP_TEXT = (
+    "🔑 Команды администратора\n\n"
+    "Цены:\n"
+    "/editprices — прислать текущий прайс для редактирования\n"
+    "/setprices — заменить все цены (отправляется после /editprices)\n"
+    "/setprice <металл> <цена> — изменить одну позицию, например:\n"
+    "   /setprice медь 800\n\n"
+    "Вакансии:\n"
+    "/editvacancies — прислать текущие вакансии для редактирования\n"
+    "/setvacancies — заменить весь список вакансий (после /editvacancies)\n"
+    "/addvacancy — добавить одну вакансию, формат:\n"
+    "   /addvacancy\n"
+    "   Должность: ...\n"
+    "   Зарплата: ...\n"
+    "   График: ...\n"
+    "   Описание: ...\n"
+    "/delvacancy <номер> — удалить вакансию по номеру из списка"
+)
+
+
+# ======================= СПРАВКА =======================
+
+@dp.message_created(Command('help'))
+async def cmd_help(event: MessageCreated):
+    text = GENERAL_HELP_TEXT
+    if is_admin(event):
+        text += "\n\n" + ADMIN_HELP_TEXT
+    await event.message.answer(text)
+
+
+# ======================= СПРАВКА =======================
+
+@dp.message_created(CommandStart())
+async def cmd_start(event: MessageCreated):
+    await event.message.answer(WELCOME_TEXT, attachments=main_menu())
+
+
+@dp.message_created(Command('help'))
+async def cmd_help(event: MessageCreated):
+    text = (
+        "📋 Список команд\n\n"
+        "👤 Общие:\n"
+        "/start — главное меню\n"
+        "/help — этот список команд\n"
+        "/myid — узнать свой ID в MAX\n"
+    )
+
+    if is_admin(event):
         text += (
-            f"{i}. {v['title']}\n"
-            f"   💰 {v['salary']} | 🗓 {v['schedule']}\n"
-            f"   {v['desc']}\n\n"
+            "\n🔑 Админ — цены:\n"
+            "/editprices — получить прайс для редактирования\n"
+            "/setprices — сохранить отредактированный прайс "
+            "(отправляется вместе с текстом из /editprices)\n"
+            "/setprice <металл> <цена> — изменить одну позицию, "
+            "например: /setprice медь 800\n"
+            "\n🔑 Админ — вакансии:\n"
+            "/editvacancies — получить список вакансий для редактирования\n"
+            "/setvacancies — сохранить отредактированный список "
+            "(отправляется вместе с текстом из /editvacancies)\n"
+            "/addvacancy — добавить одну вакансию (формат — как в /editvacancies)\n"
+            "/delvacancy <номер> — удалить вакансию по номеру "
+            "(номера смотрите в списке через кнопку «Вакансии»)\n"
         )
-    text += "📞 По вопросам трудоустройства звоните: " + PHONE
-    return text
+    else:
+        text += "\nℹ️ Если вам нужны права администратора для изменения цен и вакансий — напишите /myid и передайте полученный ID разработчику бота."
+
+    await event.message.answer(text.strip())
 
 
-# ======================= АДМИНСКИЕ КОМАНДЫ (управление ценами) =======================
+# ======================= АДМИНСКИЕ КОМАНДЫ: ЦЕНЫ =======================
 
 @dp.message_created(Command('myid'))
 async def cmd_myid(event: MessageCreated):
     await event.message.answer(
         f"Ваш ID в MAX: {event.from_user.user_id}\n\n"
-        f"Чтобы получить право менять цены, передайте это число разработчику "
-        f"бота — он добавит его в список администраторов."
+        f"Чтобы получить право менять цены и вакансии, передайте это число "
+        f"разработчику бота — он добавит его в список администраторов."
     )
 
 
 @dp.message_created(Command('editprices'))
 async def cmd_editprices(event: MessageCreated):
-    if event.from_user.user_id not in ADMIN_IDS:
+    if not is_admin(event):
         await event.message.answer("⛔ У вас нет прав для изменения цен.")
         return
-
     text = (
         "✏️ Скопируйте текст ниже, поправьте цифры и отправьте его обратно, "
         "добавив в начало команду /setprices (в первой строке):\n\n"
@@ -388,12 +553,11 @@ async def cmd_editprices(event: MessageCreated):
 
 @dp.message_created(Command('setprices'))
 async def cmd_setprices(event: MessageCreated):
-    if event.from_user.user_id not in ADMIN_IDS:
+    if not is_admin(event):
         await event.message.answer("⛔ У вас нет прав для изменения цен.")
         return
 
     full_text = event.message.body.text
-    # убираем саму команду /setprices из текста, дальше идут строки с ценами
     lines = full_text.split("\n")[1:]
 
     updated = []
@@ -403,7 +567,6 @@ async def cmd_setprices(event: MessageCreated):
         line = line.strip()
         if not line:
             continue
-        # разделитель может быть ":" или "-"
         for sep in (":", "-", "—"):
             if sep in line:
                 name_part, value_part = line.split(sep, 1)
@@ -425,7 +588,7 @@ async def cmd_setprices(event: MessageCreated):
             continue
 
         PRICES[key] = new_value
-        updated.append(f"{label_for(key)}: {format_price(new_value)}")
+        updated.append(f"{label_for_price(key)}: {format_price(new_value)}")
 
     if updated:
         save_prices(PRICES)
@@ -443,7 +606,7 @@ async def cmd_setprices(event: MessageCreated):
 
 @dp.message_created(Command('setprice'))
 async def cmd_setprice(event: MessageCreated):
-    if event.from_user.user_id not in ADMIN_IDS:
+    if not is_admin(event):
         await event.message.answer("⛔ У вас нет прав для изменения цен.")
         return
 
@@ -468,7 +631,108 @@ async def cmd_setprice(event: MessageCreated):
 
     PRICES[key] = new_value
     save_prices(PRICES)
-    await event.message.answer(f"✅ {label_for(key)}: {format_price(new_value)} ₽/кг")
+    await event.message.answer(f"✅ {label_for_price(key)}: {format_price(new_value)} ₽/кг")
+
+
+# ======================= АДМИНСКИЕ КОМАНДЫ: ВАКАНСИИ =======================
+
+@dp.message_created(Command('editvacancies'))
+async def cmd_editvacancies(event: MessageCreated):
+    if not is_admin(event):
+        await event.message.answer("⛔ У вас нет прав для изменения вакансий.")
+        return
+    text = (
+        "✏️ Скопируйте текст ниже, отредактируйте вакансии (можно добавлять или "
+        "удалять блоки целиком, разделитель между вакансиями — строка из трёх "
+        "дефисов ---), и отправьте обратно, добавив в начало команду /setvacancies:\n\n"
+        "/setvacancies\n" + vacancies_template_text()
+    )
+    await event.message.answer(text)
+
+
+@dp.message_created(Command('setvacancies'))
+async def cmd_setvacancies(event: MessageCreated):
+    if not is_admin(event):
+        await event.message.answer("⛔ У вас нет прав для изменения вакансий.")
+        return
+
+    full_text = event.message.body.text
+    body = full_text.split("\n", 1)[1] if "\n" in full_text else ""
+    raw_blocks = re.split(r'(?m)^-{3,}\s*$', body)
+
+    new_list = []
+    skipped = 0
+    for raw in raw_blocks:
+        block = raw.strip("\n")
+        if not block.strip():
+            continue
+        parsed = parse_kv_block(block)
+        if "title" not in parsed or not parsed["title"].strip():
+            skipped += 1
+            continue
+        new_list.append(vacancy_from_parsed(parsed))
+
+    if not new_list:
+        await event.message.answer(
+            "Не нашёл ни одной корректной вакансии. Проверьте формат "
+            "(должно быть поле «Должность: ...») и попробуйте снова."
+        )
+        return
+
+    VACANCIES[:] = new_list
+    save_vacancies(VACANCIES)
+
+    reply = f"✅ Список вакансий обновлён, всего позиций: {len(VACANCIES)}\n\n"
+    reply += "\n".join(f"{i}. {v['title']}" for i, v in enumerate(VACANCIES, 1))
+    if skipped:
+        reply += f"\n\n⚠️ Пропущено блоков без поля «Должность»: {skipped}"
+
+    await event.message.answer(reply)
+
+
+@dp.message_created(Command('addvacancy'))
+async def cmd_addvacancy(event: MessageCreated):
+    if not is_admin(event):
+        await event.message.answer("⛔ У вас нет прав для изменения вакансий.")
+        return
+
+    full_text = event.message.body.text
+    body = full_text.split("\n", 1)[1] if "\n" in full_text else ""
+    parsed = parse_kv_block(body)
+
+    if "title" not in parsed or not parsed["title"].strip():
+        await event.message.answer(
+            "Формат:\n/addvacancy\nДолжность: ...\nЗарплата: ...\nГрафик: ...\nОписание: ..."
+        )
+        return
+
+    new_v = vacancy_from_parsed(parsed)
+    VACANCIES.append(new_v)
+    save_vacancies(VACANCIES)
+    await event.message.answer(f"✅ Добавлена вакансия: {new_v['title']}\nВсего вакансий: {len(VACANCIES)}")
+
+
+@dp.message_created(Command('delvacancy'))
+async def cmd_delvacancy(event: MessageCreated):
+    if not is_admin(event):
+        await event.message.answer("⛔ У вас нет прав для изменения вакансий.")
+        return
+
+    parts = event.message.body.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await event.message.answer(
+            "Формат: /delvacancy <номер>\nНомер смотрите в списке вакансий (кнопка «Вакансии»)."
+        )
+        return
+
+    idx = int(parts[1]) - 1
+    if idx < 0 or idx >= len(VACANCIES):
+        await event.message.answer(f"Нет вакансии №{parts[1]}. Всего вакансий: {len(VACANCIES)}")
+        return
+
+    removed = VACANCIES.pop(idx)
+    save_vacancies(VACANCIES)
+    await event.message.answer(f"🗑 Удалена вакансия: {removed['title']}\nОсталось вакансий: {len(VACANCIES)}")
 
 
 # ======================= ОБРАБОТЧИКИ =======================
