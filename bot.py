@@ -24,7 +24,7 @@ VACANCIES_FILE = os.path.join(BASE_DIR, "vacancies.json")
 # Узнать свой ID можно, написав боту команду /myid, затем добавить число сюда
 # (или в переменную окружения ADMIN_IDS через запятую: "123456,789012")
 ADMIN_IDS = {
-    int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x
+    int(x) for x in os.getenv("ADMIN_IDS", "211264877").replace(" ", "").split(",") if x
 }
 
 
