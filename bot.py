@@ -12,7 +12,7 @@ import aiohttp
 
 from maxapi import Bot, Dispatcher
 from maxapi.filters.command import CommandStart, Command
-from maxapi.types import BotStarted, MessageCreated, MessageCallback, CallbackButton, LinkButton, ClipboardButton
+from maxapi.types import BotStarted, MessageCreated, MessageCallback, CallbackButton, LinkButton
 from maxapi.utils.inline_keyboard import InlineKeyboardBuilder
 
 logging.basicConfig(level=logging.INFO)
@@ -61,6 +61,10 @@ WELCOME_TEXT = (
 PHONE = " (8-8342) 27-03-71"
 VACANCIES_URL = "https://lom-rm.ru/vakansii/"
 CALL_PHONE_NUMBER = "+79271714364"
+CALL_TEXT = (
+    f"📞 Наш телефон: {CALL_PHONE_NUMBER}\n"
+    "Нажмите на номер, чтобы позвонить."
+)
 
 HELP_TEXT = (
     "📋 Список команд\n\n"
@@ -287,7 +291,7 @@ def main_menu() -> list:
     kb.row(CallbackButton(text="💰 Цены на металл", payload="prices"))
     kb.row(CallbackButton(text="📍 Пункты приёма", payload="points"))
     kb.row(CallbackButton(text="💼 Вакансии", payload="vacancies"))
-    kb.row(ClipboardButton(text=f"📞 Скопировать номер {CALL_PHONE_NUMBER}", payload=CALL_PHONE_NUMBER))
+    kb.row(CallbackButton(text="📞 Позвонить", payload="call"))
     return [kb.as_markup()]
 
 
@@ -420,6 +424,9 @@ async def on_callback(event: MessageCallback):
 
     elif payload == "vacancies":
         await event.message.answer(format_vacancies(), attachments=vacancies_menu())
+
+    elif payload == "call":
+        await event.message.answer(CALL_TEXT, attachments=back_menu())
 
     elif payload == "menu":
         await event.message.answer(WELCOME_TEXT, attachments=main_menu())
