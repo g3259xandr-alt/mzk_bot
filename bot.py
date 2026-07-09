@@ -60,6 +60,7 @@ WELCOME_TEXT = (
 
 PHONE = " (8-8342) 27-03-71"
 VACANCIES_URL = "https://lom-rm.ru/vakansii/"
+CALL_PHONE_NUMBER = "+79271714364"
 
 HELP_TEXT = (
     "📋 Список команд\n\n"
@@ -286,6 +287,7 @@ def main_menu() -> list:
     kb.row(CallbackButton(text="💰 Цены на металл", payload="prices"))
     kb.row(CallbackButton(text="📍 Пункты приёма", payload="points"))
     kb.row(CallbackButton(text="💼 Вакансии", payload="vacancies"))
+    kb.row(LinkButton(text="📞 Позвонить", url=f"tel:{CALL_PHONE_NUMBER}"))
     return [kb.as_markup()]
 
 
