@@ -12,7 +12,7 @@ import aiohttp
 
 from maxapi import Bot, Dispatcher
 from maxapi.filters.command import CommandStart, Command
-from maxapi.types import BotStarted, MessageCreated, MessageCallback, CallbackButton, LinkButton
+from maxapi.types import BotStarted, MessageCreated, MessageCallback, CallbackButton, LinkButton, ClipboardButton
 from maxapi.utils.inline_keyboard import InlineKeyboardBuilder
 
 logging.basicConfig(level=logging.INFO)
@@ -287,7 +287,7 @@ def main_menu() -> list:
     kb.row(CallbackButton(text="💰 Цены на металл", payload="prices"))
     kb.row(CallbackButton(text="📍 Пункты приёма", payload="points"))
     kb.row(CallbackButton(text="💼 Вакансии", payload="vacancies"))
-    kb.row(LinkButton(text="📞 Позвонить", url=f"tel:{CALL_PHONE_NUMBER}"))
+    kb.row(ClipboardButton(text=f"📞 Скопировать номер {CALL_PHONE_NUMBER}", payload=CALL_PHONE_NUMBER))
     return [kb.as_markup()]
 
 
